@@ -1,0 +1,20 @@
+{
+  "display_name": "Model Failover Router",
+  "plugin_id": "kira-ai-plugin-model-router",
+  "version": "1.0.0",
+  "author": "atsmoe",
+  "description": "Builds an ordered primary-to-fallback LLM model group before KiraAI model execution.",
+  "repo": "https://github.com/atsmoe/kira-ai-plugin-model-router",
+  "core_version": ">=2.31.4",
+  "tags": [
+    "llm",
+    "routing",
+    "reliability"
+  ],
+  "locales": {
+    "zh": {
+      "display_name": "模型故障切换路由",
+      "description": "在 KiraAI 执行模型前构造有序的主模型与备用模型链。"
+    }
+  }
+}

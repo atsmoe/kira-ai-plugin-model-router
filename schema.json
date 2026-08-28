@@ -1,0 +1,62 @@
+{
+  "enabled": {
+    "name": "Enabled",
+    "type": "switch",
+    "default": true,
+    "hint": "Enable model-group routing for IM batch messages.",
+    "locales": {
+      "zh": {
+        "name": "启用",
+        "hint": "为合并后的 IM 消息启用模型组路由。"
+      }
+    }
+  },
+  "primary_model": {
+    "name": "Primary Model",
+    "type": "string",
+    "default": "default",
+    "hint": "Use 'default' or one exact provider_id:model_id reference.",
+    "locales": {
+      "zh": {
+        "name": "主模型",
+        "hint": "填写 default，或一个完整的 provider_id:model_id。"
+      }
+    }
+  },
+  "fallback_models": {
+    "name": "Fallback Models",
+    "type": "list",
+    "default": [],
+    "hint": "Ordered provider_id:model_id entries. Entries may use different providers.",
+    "locales": {
+      "zh": {
+        "name": "备用模型",
+        "hint": "按顺序填写 provider_id:model_id；可以跨提供商。"
+      }
+    }
+  },
+  "max_chain_length": {
+    "name": "Maximum Chain Length",
+    "type": "integer",
+    "default": 5,
+    "hint": "Positive limit for chains built by this plugin.",
+    "locales": {
+      "zh": {
+        "name": "最大链长度",
+        "hint": "插件构造模型链时使用的正整数上限。"
+      }
+    }
+  },
+  "respect_existing_model_group": {
+    "name": "Respect Existing Model Group",
+    "type": "switch",
+    "default": true,
+    "hint": "Keep an upstream model group as the start of the chain and append configured fallbacks.",
+    "locales": {
+      "zh": {
+        "name": "保留已有模型组",
+        "hint": "把上游模型组保留在链首，仅追加配置的备用模型。"
+      }
+    }
+  }
+}
