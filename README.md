@@ -16,7 +16,7 @@ The current-source extension points used by this plugin are:
 - [`core/plugin/plugin_context.py`](https://github.com/xxynet/KiraAI/blob/27b5273dc59983b6843de23f294dfb4dbc06ca5c/core/plugin/plugin_context.py#L88-L113) resolves configured `provider_id:model_id` values through `PluginContext.get_llm_client(model_uuid=...)` and exposes the default client.
 - [`core/agent/agent_executor.py`](https://github.com/xxynet/KiraAI/blob/27b5273dc59983b6843de23f294dfb4dbc06ca5c/core/agent/agent_executor.py#L92-L131) advances to the next model for `APIStatusError`, `APITimeoutError`, `APIConnectionError`, and KiraAI `ProviderAPIError`, then preserves the normal final exception flow.
 
-The manifest declares `core_version: ">=2.31.4"`. Recheck these source locations before claiming compatibility with a later core version that changes plugin events, model resolution, or failover handling.
+The manifest deliberately declares `core_version: "==2.31.4"`. This release promises compatibility only with the exact core version inspected and tested. A later KiraAI version requires source revalidation and a new plugin release before the range is widened.
 
 ## Configuration
 
@@ -53,13 +53,19 @@ Example values below are placeholders. Replace them with provider and model IDs 
 6. Empty configuration, a disabled plugin, or a chain with no valid client leaves the event unchanged so normal KiraAI routing stays active.
 7. `max_chain_length` limits plugin-built chains. An upstream group is never truncated merely to meet a lower plugin cap; when it already meets or exceeds the cap, no configured fallback is appended.
 
+### Handler composition contract
+
+KiraAI executes batch handlers in descending priority order. This plugin registers at the lowest user-plugin priority, `Priority.LOW`, so ordinary upstream routers registered at `MEDIUM` or `HIGH` finish first. The plugin then performs the final composition step: preserve the upstream group by default, append configured fallbacks, remove duplicates, and enforce the configured cap without truncating the upstream group.
+
+An upstream router that must participate in this composition contract should register above `LOW`. KiraAI does not define a semantic ordering between handlers at the same priority beyond registration order, so another `LOW` handler that mutates `model_group` is not a supported upstream contract. `SYS_LOW` is intentionally not used because current KiraAI reserves system priorities from user plugins.
+
 ## Installation and deployment boundary
 
 Install this repository through the supported plugin-management flow for your KiraAI deployment. This repository does not contain deployment scripts and does not restart or alter a running KiraAI instance. Plugin Store publication and live deployment require separate approval.
 
 ## Development and tests
 
-The test suite uses explicit minimal KiraAI stubs only for isolated plugin-entrypoint import. Routing tests exercise the real `ModelRouter` public interface with fake model clients and context objects. These are unit tests, not a live KiraAI integration test.
+The entrypoint suite uses a contract-faithful minimum of KiraAI's abstract `BasePlugin`, loader binding, hook registration, and descending handler ordering. It proves lifecycle instantiation/initialization and final multi-handler event results. Routing tests exercise the real `ModelRouter` public interface with fake model clients and context objects. These are unit tests, not a live KiraAI integration test.
 
 ```bash
 python -m unittest discover -s tests -v

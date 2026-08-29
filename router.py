@@ -18,7 +18,7 @@ class ModelRouter:
         existing = list(getattr(event, "model_group", None) or [])
         preserving_existing = bool(existing and self._config.get("respect_existing_model_group", True))
         if preserving_existing:
-            chain = existing
+            chain = list(existing)
         else:
             primary_ref = self._config.get("primary_model", "default")
             if primary_ref == "default":

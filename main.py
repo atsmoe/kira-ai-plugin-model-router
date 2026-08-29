@@ -13,6 +13,14 @@ class ModelRouterPlugin(BasePlugin):
         super().__init__(ctx, cfg)
         self._router = ModelRouter(ctx, cfg, logger.warning)
 
-    @on.im_batch_message(priority=Priority.HIGH)
+    async def initialize(self):
+        """Initialize the stateless router before KiraAI registers its hooks."""
+        pass
+
+    async def terminate(self):
+        """Terminate the stateless router without external cleanup."""
+        pass
+
+    @on.im_batch_message(priority=Priority.LOW)
     async def route_batch_message(self, event: KiraMessageBatchEvent):
         self._router.route(event)
