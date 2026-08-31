@@ -15,11 +15,11 @@
     "name": "Primary Model",
     "type": "string",
     "default": "default",
-    "hint": "Use 'default' or one exact provider_id:model_id reference.",
+    "hint": "Use 'default', one exact provider_id:model_id, or one exact provider display name:model_id reference. Stable provider IDs are recommended for long-lived configurations.",
     "locales": {
       "zh": {
         "name": "主模型",
-        "hint": "填写 default，或一个完整的 provider_id:model_id。"
+        "hint": "填写 default、完整的 provider_id:model_id，或精确显示名:model_id；也可使用全角冒号“：”。长期配置建议使用稳定的 provider ID。"
       }
     }
   },
@@ -27,11 +27,11 @@
     "name": "Fallback Models",
     "type": "list",
     "default": [],
-    "hint": "Ordered provider_id:model_id entries. Entries may use different providers.",
+    "hint": "Ordered provider_id:model_id or exact provider display name:model_id entries. Stable provider IDs are recommended for long-lived configurations.",
     "locales": {
       "zh": {
         "name": "备用模型",
-        "hint": "按顺序填写 provider_id:model_id；可以跨提供商。"
+        "hint": "按顺序填写 provider_id:model_id 或精确显示名:model_id；也可使用全角冒号“：”，并可跨提供商。长期配置建议使用稳定的 provider ID。"
       }
     }
   },

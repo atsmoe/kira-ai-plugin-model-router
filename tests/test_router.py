@@ -8,10 +8,16 @@ def client(provider_id: str, model_id: str):
     return SimpleNamespace(model=SimpleNamespace(provider_id=provider_id, model_id=model_id))
 
 
+def provider(provider_id: str, provider_name: str):
+    return SimpleNamespace(provider_id=provider_id, provider_name=provider_name)
+
+
 class FakeContext:
-    def __init__(self, default=None, models=None):
+    def __init__(self, default=None, models=None, providers=None):
         self.default = default
         self.models = models or {}
+        if providers is not None:
+            self.provider_mgr = SimpleNamespace(get_all_providers=lambda: providers)
 
     def get_default_llm_client(self):
         return self.default
@@ -46,6 +52,149 @@ class ModelRouterTests(unittest.TestCase):
         ModelRouter(context, {"primary_model": "provider-b:model-1"}).route(event)
 
         self.assertEqual(event.model_group, [fixed])
+
+    def test_display_name_with_full_width_colon_resolves_exact_provider(self):
+        fallback = client("provider-b", "model-1")
+        event = SimpleNamespace(model_group=[])
+        context = FakeContext(
+            models={"provider-b:model-1": fallback},
+            providers={"provider-b": provider("provider-b", "Friendly Provider")},
+        )
+
+        ModelRouter(context, {
+            "fallback_models": ["Friendly Provider：model-1"],
+        }).route(event)
+
+        self.assertEqual(event.model_group, [fallback])
+
+    def test_display_name_with_ascii_colon_trims_surrounding_whitespace(self):
+        fallback = client("provider-b", "model-1")
+        event = SimpleNamespace(model_group=[])
+        context = FakeContext(
+            models={"provider-b:model-1": fallback},
+            providers={"provider-b": provider("provider-b", "Friendly Provider")},
+        )
+
+        ModelRouter(context, {
+            "fallback_models": ["  Friendly Provider : model-1  "],
+        }).route(event)
+
+        self.assertEqual(event.model_group, [fallback])
+
+    def test_display_name_can_select_primary_model(self):
+        primary = client("provider-b", "model-1")
+        event = SimpleNamespace(model_group=[])
+        context = FakeContext(
+            models={"provider-b:model-1": primary},
+            providers={"provider-b": provider("provider-b", "Friendly Provider")},
+        )
+
+        ModelRouter(context, {
+            "primary_model": "Friendly Provider:model-1",
+        }).route(event)
+
+        self.assertEqual(event.model_group, [primary])
+
+    def test_model_id_after_first_separator_is_preserved(self):
+        fallback = client("provider-b", "model:variant")
+        event = SimpleNamespace(model_group=[])
+        context = FakeContext(
+            models={"provider-b:model:variant": fallback},
+            providers={"provider-b": provider("provider-b", "Friendly Provider")},
+        )
+
+        ModelRouter(context, {
+            "fallback_models": ["Friendly Provider:model:variant"],
+        }).route(event)
+
+        self.assertEqual(event.model_group, [fallback])
+
+    def test_direct_provider_id_resolution_precedes_display_name_lookup(self):
+        direct = client("alias-id", "model-1")
+        alias_target = client("provider-b", "model-1")
+        calls = []
+        context = FakeContext(models={
+            "alias-id:model-1": direct,
+            "provider-b:model-1": alias_target,
+        })
+        context.provider_mgr = SimpleNamespace(
+            get_all_providers=lambda: calls.append("called") or {
+                "provider-b": provider("provider-b", "alias-id"),
+            }
+        )
+        event = SimpleNamespace(model_group=[])
+
+        ModelRouter(context, {
+            "fallback_models": ["alias-id:model-1"],
+        }).route(event)
+
+        self.assertEqual(event.model_group, [direct])
+        self.assertEqual(calls, [])
+
+    def test_unknown_display_name_fails_closed_without_echoing_reference(self):
+        warnings = []
+        upstream = client("upstream", "main")
+        event = SimpleNamespace(model_group=[upstream])
+        context = FakeContext(models={}, providers={})
+
+        ModelRouter(context, {
+            "fallback_models": ["PRIVATE PROVIDER:secret-model"],
+        }, warnings.append).route(event)
+
+        self.assertEqual(event.model_group, [upstream])
+        self.assertEqual(len(warnings), 1)
+        self.assertNotIn("PRIVATE PROVIDER", warnings[0])
+        self.assertNotIn("secret-model", warnings[0])
+
+    def test_duplicate_display_names_fail_closed(self):
+        first = client("provider-a", "model-1")
+        second = client("provider-b", "model-1")
+        warnings = []
+        upstream = client("upstream", "main")
+        event = SimpleNamespace(model_group=[upstream])
+        context = FakeContext(
+            models={
+                "provider-a:model-1": first,
+                "provider-b:model-1": second,
+            },
+            providers={
+                "provider-a": provider("provider-a", "Duplicated Name"),
+                "provider-b": provider("provider-b", "Duplicated Name"),
+            },
+        )
+
+        ModelRouter(context, {
+            "fallback_models": ["Duplicated Name:model-1"],
+        }, warnings.append).route(event)
+
+        self.assertEqual(event.model_group, [upstream])
+        self.assertEqual(len(warnings), 1)
+        self.assertNotIn("Duplicated Name", warnings[0])
+
+    def test_missing_or_incompatible_provider_manager_fails_safely(self):
+        contexts = [
+            FakeContext(models={}),
+            FakeContext(models={}, providers=[]),
+            FakeContext(models={}, providers={}),
+        ]
+        contexts[2].provider_mgr = SimpleNamespace(
+            get_all_providers=lambda: (_ for _ in ()).throw(RuntimeError("private detail"))
+        )
+
+        for context in contexts:
+            with self.subTest(provider_mgr=getattr(context, "provider_mgr", None)):
+                warnings = []
+                upstream = client("upstream", "main")
+                event = SimpleNamespace(model_group=[upstream])
+                ModelRouter(context, {
+                    "fallback_models": ["PRIVATE PROVIDER:secret-model"],
+                }, warnings.append).route(event)
+
+                self.assertEqual(event.model_group, [upstream])
+                self.assertEqual(len(warnings), 1)
+                self.assertNotIn("PRIVATE PROVIDER", warnings[0])
+                self.assertNotIn("secret-model", warnings[0])
+                self.assertNotIn("private detail", warnings[0])
 
     def test_fallbacks_keep_same_and_cross_provider_order(self):
         primary = client("provider-a", "main")

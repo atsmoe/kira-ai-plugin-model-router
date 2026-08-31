@@ -12,7 +12,7 @@ class MetadataTests(unittest.TestCase):
         schema = json.loads((ROOT / "schema.json").read_text(encoding="utf-8"))
 
         self.assertEqual(manifest["plugin_id"], "kira-ai-plugin-model-router")
-        self.assertEqual(manifest["version"], "1.0.1")
+        self.assertEqual(manifest["version"], "1.0.2")
         self.assertEqual(manifest["core_version"], "==2.31.4")
         self.assertEqual(
             manifest["repo"],
@@ -31,6 +31,12 @@ class MetadataTests(unittest.TestCase):
         self.assertTrue(schema["enabled"]["default"])
         self.assertEqual(schema["primary_model"]["default"], "default")
         self.assertEqual(schema["fallback_models"]["default"], [])
+        self.assertIn("provider display name", schema["primary_model"]["hint"])
+        self.assertIn("：", schema["primary_model"]["locales"]["zh"]["hint"])
+        self.assertIn(
+            "stable provider ids",
+            schema["fallback_models"]["hint"].lower(),
+        )
         self.assertGreater(schema["max_chain_length"]["default"], 0)
         self.assertTrue(schema["respect_existing_model_group"]["default"])
 

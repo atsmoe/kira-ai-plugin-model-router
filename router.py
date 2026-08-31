@@ -43,19 +43,101 @@ class ModelRouter:
             event.model_group = chain
 
     def _resolve(self, model_ref, role, index):
-        if not isinstance(model_ref, str) or ":" not in model_ref:
+        parsed = self._parse_reference(model_ref)
+        if parsed is None:
             self._log_warning(f"Ignored invalid {role} model reference at position {index}.")
             return None
 
-        provider_id, model_id = (part.strip() for part in model_ref.split(":", 1))
-        if not provider_id or not model_id:
-            self._log_warning(f"Ignored invalid {role} model reference at position {index}.")
+        provider_token, model_id = parsed
+        resolved = self._context.get_llm_client(
+            model_uuid=f"{provider_token}:{model_id}"
+        )
+        if resolved is not None:
+            return resolved
+
+        provider = self._resolve_provider_name(provider_token, role, index)
+        if provider is None:
             return None
 
-        resolved = self._context.get_llm_client(model_uuid=f"{provider_id}:{model_id}")
+        provider_id = getattr(provider, "provider_id", None)
+        if not isinstance(provider_id, str) or not provider_id:
+            self._log_warning(
+                f"Ignored unresolved {role} model at position {index}: "
+                "provider entry is incompatible."
+            )
+            return None
+
+        resolved = self._context.get_llm_client(
+            model_uuid=f"{provider_id}:{model_id}"
+        )
         if resolved is None:
             self._log_warning(f"Ignored unavailable {role} model at position {index}.")
         return resolved
+
+    @staticmethod
+    def _parse_reference(model_ref):
+        if not isinstance(model_ref, str):
+            return None
+
+        separator_positions = [
+            position
+            for position in (model_ref.find(":"), model_ref.find("："))
+            if position >= 0
+        ]
+        if not separator_positions:
+            return None
+
+        separator_position = min(separator_positions)
+        provider_token = model_ref[:separator_position].strip()
+        model_id = model_ref[separator_position + 1:].strip()
+        if not provider_token or not model_id:
+            return None
+        return provider_token, model_id
+
+    def _resolve_provider_name(self, provider_name, role, index):
+        provider_mgr = getattr(self._context, "provider_mgr", None)
+        get_all_providers = getattr(provider_mgr, "get_all_providers", None)
+        if not callable(get_all_providers):
+            self._log_warning(
+                f"Ignored unresolved {role} model at position {index}: "
+                "provider catalog is unavailable."
+            )
+            return None
+
+        try:
+            providers = get_all_providers()
+        except Exception:
+            self._log_warning(
+                f"Ignored unresolved {role} model at position {index}: "
+                "provider catalog is unavailable."
+            )
+            return None
+
+        if not isinstance(providers, dict):
+            self._log_warning(
+                f"Ignored unresolved {role} model at position {index}: "
+                "provider catalog is incompatible."
+            )
+            return None
+
+        matches = [
+            provider
+            for provider in providers.values()
+            if getattr(provider, "provider_name", None) == provider_name
+        ]
+        if not matches:
+            self._log_warning(
+                f"Ignored unresolved {role} model at position {index}: "
+                "provider name was not found."
+            )
+            return None
+        if len(matches) > 1:
+            self._log_warning(
+                f"Ignored unresolved {role} model at position {index}: "
+                "provider name is ambiguous."
+            )
+            return None
+        return matches[0]
 
     @staticmethod
     def _deduplicate(clients):

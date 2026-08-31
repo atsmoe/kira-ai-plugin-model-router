@@ -14,6 +14,8 @@ The current-source extension points used by this plugin are:
 - [`core/message_manager.py`](https://github.com/xxynet/KiraAI/blob/27b5273dc59983b6843de23f294dfb4dbc06ca5c/core/message_manager.py#L548-L620) runs batch handlers before selecting `event.model_group` for model execution.
 - [`core/chat/message_utils.py`](https://github.com/xxynet/KiraAI/blob/27b5273dc59983b6843de23f294dfb4dbc06ca5c/core/chat/message_utils.py#L162-L181) exposes the ordered `KiraMessageBatchEvent.model_group` override.
 - [`core/plugin/plugin_context.py`](https://github.com/xxynet/KiraAI/blob/27b5273dc59983b6843de23f294dfb4dbc06ca5c/core/plugin/plugin_context.py#L88-L113) resolves configured `provider_id:model_id` values through `PluginContext.get_llm_client(model_uuid=...)` and exposes the default client.
+- [`core/provider/provider_manager.py`](https://github.com/xxynet/KiraAI/blob/27b5273dc59983b6843de23f294dfb4dbc06ca5c/core/provider/provider_manager.py) exposes `get_all_providers()` for exact display-name lookup.
+- [`core/provider/provider.py`](https://github.com/xxynet/KiraAI/blob/27b5273dc59983b6843de23f294dfb4dbc06ca5c/core/provider/provider.py) exposes `BaseProvider.provider_id` and `BaseProvider.provider_name`.
 - [`core/agent/agent_executor.py`](https://github.com/xxynet/KiraAI/blob/27b5273dc59983b6843de23f294dfb4dbc06ca5c/core/agent/agent_executor.py#L92-L131) advances to the next model for `APIStatusError`, `APITimeoutError`, `APIConnectionError`, and KiraAI `ProviderAPIError`, then preserves the normal final exception flow.
 
 The manifest deliberately declares `core_version: "==2.31.4"`. This release promises compatibility only with the exact core version inspected and tested. A later KiraAI version requires source revalidation and a new plugin release before the range is widened.
@@ -23,20 +25,20 @@ The manifest deliberately declares `core_version: "==2.31.4"`. This release prom
 | Field | Default | Meaning |
 | --- | --- | --- |
 | `enabled` | `true` | Enables routing for IM batch messages. |
-| `primary_model` | `default` | `default` uses KiraAI's configured default client; otherwise use one exact `provider_id:model_id`. |
-| `fallback_models` | `[]` | Ordered list of exact `provider_id:model_id` values. Different entries may use different providers. |
+| `primary_model` | `default` | `default` uses KiraAI's configured default client; otherwise use one exact `provider_id:model_id` or `Provider Display Name:model_id`. |
+| `fallback_models` | `[]` | Ordered list using stable provider IDs or exact provider display names. ASCII `:` and full-width `：` separators are accepted. |
 | `max_chain_length` | `5` | Positive upper bound for a chain built by this plugin. |
 | `respect_existing_model_group` | `true` | Keeps an upstream group at the start of the chain and appends configured fallbacks. |
 
-Example values below are placeholders. Replace them with provider and model IDs configured in your own KiraAI instance.
+Example values below are placeholders. Replace them with provider and model references configured in your own KiraAI instance. Stable provider IDs are recommended for long-lived configurations because display names can be renamed or duplicated.
 
 ```json
 {
   "enabled": true,
   "primary_model": "provider_a:model_primary",
   "fallback_models": [
-    "provider_a:model_backup",
-    "provider_b:model_backup"
+    "Friendly Provider:model_backup",
+    "Another Provider：model_backup"
   ],
   "max_chain_length": 3,
   "respect_existing_model_group": true
@@ -49,9 +51,12 @@ Example values below are placeholders. Replace them with provider and model IDs 
 2. With `respect_existing_model_group: true`, an upstream model group becomes the start of the chain. The configured `primary_model` is not inserted, and configured fallbacks are appended.
 3. With `respect_existing_model_group: false`, a valid configured chain replaces the upstream group. If nothing resolves, the event remains unchanged.
 4. Duplicate clients are removed by `(provider_id, model_id)` while preserving the first occurrence.
-5. Invalid syntax and unavailable models are skipped with position-only diagnostics. Model references, provider response bodies, credentials, and request content are not logged.
-6. Empty configuration, a disabled plugin, or a chain with no valid client leaves the event unchanged so normal KiraAI routing stays active.
-7. `max_chain_length` limits plugin-built chains. An upstream group is never truncated merely to meet a lower plugin cap; when it already meets or exceeds the cap, no configured fallback is appended.
+5. Each non-default reference is trimmed and split at the first ASCII `:` or full-width `：`. The model ID after that first separator is preserved, so model IDs may contain additional separators. Provider display names themselves therefore cannot contain either separator.
+6. The provider token is tried as a provider ID first. Only when that direct lookup fails does the plugin scan the current public provider catalog for one exact, case-sensitive `provider_name` match.
+7. Zero or multiple display-name matches fail closed. The plugin never selects the first duplicate, performs fuzzy matching, or caches display names; renamed providers are observed on the next routed event.
+8. Invalid syntax, unresolved names, ambiguity, incompatible provider catalogs, and unavailable models are skipped with role/position/reason diagnostics. Model references, provider configuration, endpoints, credentials, response bodies, and request content are not logged.
+9. Empty configuration, a disabled plugin, or a chain with no valid client leaves the event unchanged so normal KiraAI routing stays active.
+10. `max_chain_length` limits plugin-built chains. An upstream group is never truncated merely to meet a lower plugin cap; when it already meets or exceeds the cap, no configured fallback is appended.
 
 ### Handler composition contract
 
@@ -75,7 +80,7 @@ python -m json.tool schema.json
 git diff --check
 ```
 
-Covered behavior includes disabled routing, default and fixed primaries, ordered same-provider and cross-provider fallbacks, safe invalid-reference handling, stable de-duplication, upstream group preservation, empty or wholly invalid configuration, and chain-length enforcement.
+Covered behavior includes disabled routing, default and fixed primaries, ordered same-provider and cross-provider fallbacks, provider IDs, exact display names with ASCII/full-width separators and whitespace, direct-ID precedence, unknown/duplicate-name fail-closed handling, missing/incompatible provider catalogs, safe diagnostics, stable de-duplication, upstream group preservation, empty or wholly invalid configuration, and chain-length enforcement.
 
 ## Operational considerations
 
