@@ -131,6 +131,29 @@ class ModelRouterTests(unittest.TestCase):
         self.assertEqual(event.model_group, [direct])
         self.assertEqual(calls, [])
 
+    def test_existing_provider_id_with_missing_model_is_not_reinterpreted_as_name(self):
+        upstream = client("upstream", "main")
+        wrong_provider_model = client("other-id", "model-1")
+        warnings = []
+        event = SimpleNamespace(model_group=[upstream])
+        context = FakeContext(
+            models={"other-id:model-1": wrong_provider_model},
+            providers={
+                "stable-id": provider("stable-id", "Stable Provider"),
+                "other-id": provider("other-id", "stable-id"),
+            },
+        )
+
+        ModelRouter(context, {
+            "fallback_models": ["stable-id:model-1"],
+        }, warnings.append).route(event)
+
+        self.assertEqual(event.model_group, [upstream])
+        self.assertNotIn(wrong_provider_model, event.model_group)
+        self.assertEqual(len(warnings), 1)
+        self.assertNotIn("stable-id", warnings[0])
+        self.assertNotIn("model-1", warnings[0])
+
     def test_unknown_display_name_fails_closed_without_echoing_reference(self):
         warnings = []
         upstream = client("upstream", "main")

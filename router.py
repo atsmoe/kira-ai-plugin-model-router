@@ -120,6 +120,12 @@ class ModelRouter:
             )
             return None
 
+        if provider_name in providers:
+            self._log_warning(
+                f"Ignored unavailable {role} model at position {index}."
+            )
+            return None
+
         matches = [
             provider
             for provider in providers.values()

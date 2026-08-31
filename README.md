@@ -52,7 +52,7 @@ Example values below are placeholders. Replace them with provider and model refe
 3. With `respect_existing_model_group: false`, a valid configured chain replaces the upstream group. If nothing resolves, the event remains unchanged.
 4. Duplicate clients are removed by `(provider_id, model_id)` while preserving the first occurrence.
 5. Each non-default reference is trimmed and split at the first ASCII `:` or full-width `：`. The model ID after that first separator is preserved, so model IDs may contain additional separators. Provider display names themselves therefore cannot contain either separator.
-6. The provider token is tried as a provider ID first. Only when that direct lookup fails does the plugin scan the current public provider catalog for one exact, case-sensitive `provider_name` match.
+6. The provider token is tried as a provider ID first. After that direct lookup fails, the plugin reads the current public provider catalog: an existing provider ID with an unavailable model fails closed, while only a token that is not an existing provider ID may resolve through one exact, case-sensitive `provider_name` match.
 7. Zero or multiple display-name matches fail closed. The plugin never selects the first duplicate, performs fuzzy matching, or caches display names; renamed providers are observed on the next routed event.
 8. Invalid syntax, unresolved names, ambiguity, incompatible provider catalogs, and unavailable models are skipped with role/position/reason diagnostics. Model references, provider configuration, endpoints, credentials, response bodies, and request content are not logged.
 9. Empty configuration, a disabled plugin, or a chain with no valid client leaves the event unchanged so normal KiraAI routing stays active.
