@@ -8,16 +8,13 @@
 
 ## 版本与兼容性
 
-| 插件版本 | KiraAI 版本限制 | 获取位置 |
-| --- | --- | --- |
-| 1.0.2 | `==2.31.4` | 当前 `main` 分支 |
-| 1.0.3 | `>=2.31.4,<=2.33.3` | [兼容性更新 PR #1](https://github.com/atsmoe/kira-ai-plugin-model-router/pull/1)，尚未合并 |
+当前插件版本：**1.0.4**。可直接从本仓库 `main` 分支安装或更新。
 
-1.0.3 修复了旧版把核心版本锁定为 2.31.4、导致较新版本拒绝加载的问题。已重新核对 KiraAI 2.33.3 的消息钩子、模型组、提供商解析与核心故障切换接口，无需修改路由算法或迁移现有配置。
+从 1.0.4 起，插件不声明 `core_version`，不对 KiraAI 设置最低版本、最高版本或精确版本限制。KiraAI 更新版本号时，不会仅因版本检查而拒绝加载本插件，也不需要为了放宽版本范围反复更新插件。
 
-兼容性核对基线为 KiraAI [2.31.4](https://github.com/xxynet/KiraAI/commit/27b5273dc59983b6843de23f294dfb4dbc06ca5c) 和 [2.33.3](https://github.com/xxynet/KiraAI/commit/5424c7dffb750a46dabcd20db69ca31007be7780)。版本范围不代表逐一测试了所有中间版本；高于 2.33.3 的核心版本仍需重新验证。
+已核对的核心版本为 KiraAI [2.31.4](https://github.com/xxynet/KiraAI/commit/27b5273dc59983b6843de23f294dfb4dbc06ca5c) 和 [2.33.3](https://github.com/xxynet/KiraAI/commit/5424c7dffb750a46dabcd20db69ca31007be7780)。这些是验证记录，不是安装限制，也不代表保证兼容所有历史或未来版本。如果核心实际修改了插件依赖的接口，再根据具体问题修复。
 
-**使用 KiraAI 2.33.3 时，不要把当前 main 分支当作 1.0.3 安装。** 对应代码位于 [fix/kiraai-2.33-compat 分支](https://github.com/atsmoe/kira-ai-plugin-model-router/tree/fix/kiraai-2.33-compat)，固定提交为 [cf9a2db](https://github.com/atsmoe/kira-ai-plugin-model-router/commit/cf9a2dbca400d877191dc3d55dd23da718ff84f4)。安装方式须支持选择该分支或提交；否则等待 PR 合并。
+旧版 1.0.2 锁定 2.31.4，1.0.3 限制在 2.31.4–2.33.3；更新到 1.0.4 即移除这些版本门槛，现有主备模型配置无需迁移。
 
 ## 快速配置
 
@@ -77,7 +74,7 @@
 
 ### 升级 KiraAI 后插件加载失败
 
-先检查插件版本及 `manifest.json` 的 `core_version`。1.0.2 仅接受 KiraAI 2.31.4；使用 2.33.3 应选择上文的 1.0.3 兼容代码。不要仅删除版本限制就认为已完成适配。
+如果仍在使用 1.0.2 或 1.0.3，请先更新至 1.0.4，移除旧的版本限制。1.0.4 不会按核心版本号阻止加载；若仍然失败，应查看具体的导入、依赖或接口错误，而不是继续修改版本号。
 
 ### 为什么没有切换备用模型？
 
