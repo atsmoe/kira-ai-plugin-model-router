@@ -18,7 +18,7 @@ The current-source extension points used by this plugin are:
 - [`core/provider/provider.py`](https://github.com/xxynet/KiraAI/blob/27b5273dc59983b6843de23f294dfb4dbc06ca5c/core/provider/provider.py) exposes `BaseProvider.provider_id` and `BaseProvider.provider_name`.
 - [`core/agent/agent_executor.py`](https://github.com/xxynet/KiraAI/blob/27b5273dc59983b6843de23f294dfb4dbc06ca5c/core/agent/agent_executor.py#L92-L131) advances to the next model for `APIStatusError`, `APITimeoutError`, `APIConnectionError`, and KiraAI `ProviderAPIError`, then preserves the normal final exception flow.
 
-The manifest deliberately declares `core_version: "==2.31.4"`. This release promises compatibility only with the exact core version inspected and tested. A later KiraAI version requires source revalidation and a new plugin release before the range is widened.
+Version 1.0.3 additionally revalidates KiraAI v2.33.3 (`5424c7dffb750a46dabcd20db69ca31007be7780`). The batch hook, model-group override, provider lookup, and core-owned failover remain compatible, so no routing algorithm change is needed. The manifest now declares `core_version: ">=2.31.4,<=2.33.3"`, fixing rejection by the loader on newer supported cores. Versions after 2.33.3 remain gated pending validation. Existing primary/fallback configuration is unchanged.
 
 ## Configuration
 
