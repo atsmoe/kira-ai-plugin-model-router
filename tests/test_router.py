@@ -27,6 +27,81 @@ class FakeContext:
 
 
 class ModelRouterTests(unittest.TestCase):
+    def test_default_lookup_error_still_routes_to_valid_fallback(self):
+        backup = client("provider-b", "backup")
+        context = FakeContext(models={"provider-b:backup": backup})
+        context.get_default_llm_client = lambda: (_ for _ in ()).throw(
+            ValueError("private provider details")
+        )
+        warnings = []
+        event = SimpleNamespace(model_group=[])
+        ModelRouter(context, {
+            "primary_model": "default", "fallback_models": ["provider-b:backup"],
+        }, warnings.append).route(event)
+        self.assertEqual(event.model_group, [backup])
+        self.assertEqual(len(warnings), 1)
+        self.assertNotIn("private provider details", warnings[0])
+
+    def test_default_lookup_error_without_fallback_keeps_original_group(self):
+        context = FakeContext()
+        context.get_default_llm_client = lambda: (_ for _ in ()).throw(TypeError("private"))
+        original = [client("upstream", "main")]
+        event = SimpleNamespace(model_group=original)
+        ModelRouter(context, {
+            "primary_model": "default", "respect_existing_model_group": False,
+        }).route(event)
+        self.assertIs(event.model_group, original)
+
+    def test_invalid_fallback_container_keeps_primary_without_interpreting_keys(self):
+        primary = client("provider-a", "main")
+        backup = client("provider-b", "backup")
+        for value in (None, 42, True, "provider-b:backup", {"provider-b:backup": True}):
+            with self.subTest(value=value):
+                warnings = []
+                event = SimpleNamespace(model_group=[])
+                context = FakeContext(default=primary, models={"provider-b:backup": backup})
+                ModelRouter(context, {
+                    "primary_model": "default", "fallback_models": value,
+                }, warnings.append).route(event)
+                self.assertEqual(event.model_group, [primary])
+                self.assertEqual(len(warnings), 1)
+                self.assertNotIn("provider-b", warnings[0])
+
+    def test_invalid_chain_limits_use_default_without_crashing_or_truncating(self):
+        primary = client("provider-a", "main")
+        backup = client("provider-b", "backup")
+        for value in (True, False, 1.5, float("inf"), float("nan"), None, 0, -1, "bad"):
+            with self.subTest(value=value):
+                warnings = []
+                event = SimpleNamespace(model_group=[])
+                context = FakeContext(default=primary, models={"provider-b:backup": backup})
+                ModelRouter(context, {
+                    "primary_model": "default",
+                    "fallback_models": ["provider-b:backup"],
+                    "max_chain_length": value,
+                }, warnings.append).route(event)
+                self.assertEqual(event.model_group, [primary, backup])
+                self.assertEqual(len(warnings), 1)
+
+    def test_integer_string_limit_remains_supported(self):
+        primary = client("provider-a", "main")
+        backup = client("provider-b", "backup")
+        event = SimpleNamespace(model_group=[])
+        ModelRouter(FakeContext(default=primary, models={"provider-b:backup": backup}), {
+            "primary_model": "default", "fallback_models": ["provider-b:backup"],
+            "max_chain_length": "1",
+        }).route(event)
+        self.assertEqual(event.model_group, [primary])
+
+    def test_existing_group_over_limit_is_not_truncated(self):
+        original = [client("upstream", str(i)) for i in range(3)]
+        event = SimpleNamespace(model_group=original)
+        backup = client("provider-b", "backup")
+        ModelRouter(FakeContext(models={"provider-b:backup": backup}), {
+            "fallback_models": ["provider-b:backup"], "max_chain_length": 1,
+        }).route(event)
+        self.assertEqual(event.model_group, original)
+
     def test_disabled_router_leaves_event_unchanged(self):
         original = [client("provider-a", "upstream")]
         event = SimpleNamespace(model_group=original)
