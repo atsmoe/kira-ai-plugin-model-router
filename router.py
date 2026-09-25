@@ -12,7 +12,11 @@ class ModelRouter:
     def route(self, event):
         if not self._config.get("enabled", True):
             return
-        if "primary_model" not in self._config and not self._config.get("fallback_models"):
+        fallback_refs = self._config.get("fallback_models", [])
+        if not isinstance(fallback_refs, list):
+            self._log_warning("Invalid fallback_models; expected a list. Ignoring fallback entries.")
+            fallback_refs = []
+        if "primary_model" not in self._config and not fallback_refs:
             return
 
         existing = list(getattr(event, "model_group", None) or [])
@@ -22,14 +26,18 @@ class ModelRouter:
         else:
             primary_ref = self._config.get("primary_model", "default")
             if primary_ref == "default":
-                primary = self._context.get_default_llm_client()
+                try:
+                    primary = self._context.get_default_llm_client()
+                except Exception:
+                    # Core can raise while constructing an unavailable default client.
+                    primary = None
                 if primary is None:
                     self._log_warning("Default primary model is unavailable; normal routing is preserved if no fallback resolves.")
             else:
                 primary = self._resolve(primary_ref, "primary", 0)
 
             chain = [primary] if primary is not None else []
-        for index, fallback_ref in enumerate(self._config.get("fallback_models", []), start=1):
+        for index, fallback_ref in enumerate(fallback_refs, start=1):
             fallback = self._resolve(fallback_ref, "fallback", index)
             if fallback is not None:
                 chain.append(fallback)
@@ -162,7 +170,7 @@ class ModelRouter:
     def _max_chain_length(self):
         value = self._config.get("max_chain_length", 5)
         try:
-            parsed = int(value)
+            parsed = int(value) if isinstance(value, (int, str)) and not isinstance(value, bool) else 0
         except (TypeError, ValueError):
             parsed = 0
         if parsed <= 0:

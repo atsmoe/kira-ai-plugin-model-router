@@ -8,13 +8,15 @@
 
 ## 版本与兼容性
 
-当前插件版本：**1.0.4**。可直接从本仓库 `main` 分支安装或更新。
+当前插件版本：**1.0.5**。要求 **KiraAI >= 2.34.7**。
 
-从 1.0.4 起，插件不声明 `core_version`，不对 KiraAI 设置最低版本、最高版本或精确版本限制。KiraAI 更新版本号时，不会仅因版本检查而拒绝加载本插件，也不需要为了放宽版本范围反复更新插件。
+1.0.5 使用 `core_version: ">=2.34.7"`，只设置最低版本，不锁定精确版本，也不设置最高版本。后续更高正式版本会通过版本检查，无需每次随核心升级修改插件版本范围。低于 2.34.7 的核心无法加载 1.0.5。
 
-已核对的核心版本为 KiraAI [2.31.4](https://github.com/xxynet/KiraAI/commit/27b5273dc59983b6843de23f294dfb4dbc06ca5c) 和 [2.33.3](https://github.com/xxynet/KiraAI/commit/5424c7dffb750a46dabcd20db69ca31007be7780)。这些是验证记录，不是安装限制，也不代表保证兼容所有历史或未来版本。如果核心实际修改了插件依赖的接口，再根据具体问题修复。
+截至 2026-09-25，核对的最新正式版为 [KiraAI 2.34.7](https://github.com/xxynet/KiraAI/releases/tag/v2.34.7)，源码提交为 [`69a5572`](https://github.com/xxynet/KiraAI/commit/69a55725f1a9625900ddb1bb04c6f31fad90a501)。验证包括 29 项插件单元测试和 3 项基于该核心实际源码定义的隔离测试；未启动完整 KiraAI 服务或调用真实提供商。版本检查通过不代表保证兼容所有未来接口变更。
 
-旧版 1.0.2 锁定 2.31.4，1.0.3 限制在 2.31.4–2.33.3；更新到 1.0.4 即移除这些版本门槛，现有主备模型配置无需迁移。
+版本历史：1.0.2 锁定 2.31.4，1.0.3 限制在 2.31.4–2.33.3，1.0.4 移除版本门槛；1.0.5 改为以上最低版本规则。现有有效主备模型配置无需迁移。
+
+1.0.5 同时修复：默认模型初始化异常导致备用链失效、备用列表格式异常导致路由报错或错误解析、非法链长度导致备用项被截断或路由报错。
 
 ## 快速配置
 
@@ -57,8 +59,8 @@
 | --- | --- | --- |
 | `enabled` | `true` | 是否为合并后的 IM 消息构造模型组；还需在 KiraAI 插件管理中启用插件。 |
 | `primary_model` | `default` | 使用核心默认模型，或填写一个完整模型引用。 |
-| `fallback_models` | `[]` | 按尝试顺序排列的备用模型引用，可跨提供商。 |
-| `max_chain_length` | `5` | 插件构造的模型链长度上限，包含主模型；应为正整数。 |
+| `fallback_models` | `[]` | 按尝试顺序排列的备用模型引用，可跨提供商；非列表值会被忽略并记录警告。 |
+| `max_chain_length` | `5` | 插件构造的模型链长度上限，包含主模型；应为正整数（也兼容整数字符串），布尔值、小数等非法值回退到 5。 |
 | `respect_existing_model_group` | `true` | 保留上游插件设置的模型组，并在后面追加备用模型。 |
 
 ### 与其他路由插件一起使用
@@ -74,7 +76,7 @@
 
 ### 升级 KiraAI 后插件加载失败
 
-如果仍在使用 1.0.2 或 1.0.3，请先更新至 1.0.4，移除旧的版本限制。1.0.4 不会按核心版本号阻止加载；若仍然失败，应查看具体的导入、依赖或接口错误，而不是继续修改版本号。
+请确认核心为 2.34.7 或以上，插件为 1.0.5。1.0.5 不设置版本上限；若满足下限仍加载失败，应查看具体的导入、依赖或接口错误。旧核心不满足下限时，应先升级核心，或保留之前适用的插件版本。
 
 ### 为什么没有切换备用模型？
 
@@ -95,6 +97,8 @@
 
 建议改用稳定的提供商 ID。插件会记录被跳过配置项的角色、位置和原因，不记录完整模型引用、服务地址、凭据或请求正文。若全部模型都无效，则保留原事件，让 KiraAI 继续正常路由。
 
+默认模型在解析或初始化时抛出异常，也会记录不含异常详情的警告并继续解析备用模型；只要存在有效备用项，仍可构造备用链。
+
 ## 开发与验证
 
 在插件仓库根目录运行：
@@ -109,12 +113,14 @@ git diff --check
 
 单元测试覆盖主备顺序、跨提供商解析、全角冒号、显示名歧义、去重、长度上限、已有模型组保留、生命周期和钩子执行顺序。测试使用模拟上下文与模型客户端，不代表真实提供商调用一定成功。
 
-主要核心接口（链接固定到已核对的 KiraAI 2.33.3 提交）：
+可选核心源码检查需要 `packaging` 和可信的 KiraAI 源码目录。将环境变量 `KIRA_CORE_SOURCE` 设为该目录后，运行同一条 `unittest` 命令即可启用另外 3 项检查；未设置时会明确跳过。它们执行核心的实际版本检查、上下文解析及钩子排序定义，其他依赖使用模拟对象，不代表完整服务集成验证。版本样例中更高的版本号只用于验证范围表达式。
 
-- [插件钩子注册](https://github.com/xxynet/KiraAI/blob/5424c7dffb750a46dabcd20db69ca31007be7780/core/plugin/plugin_registry.py)：`@on.im_batch_message`。
-- [消息处理](https://github.com/xxynet/KiraAI/blob/5424c7dffb750a46dabcd20db69ca31007be7780/core/message_manager.py)与[消息事件](https://github.com/xxynet/KiraAI/blob/5424c7dffb750a46dabcd20db69ca31007be7780/core/chat/message_utils.py)：在模型调用前读取 `event.model_group`。
-- [插件上下文](https://github.com/xxynet/KiraAI/blob/5424c7dffb750a46dabcd20db69ca31007be7780/core/plugin/plugin_context.py)与[提供商目录](https://github.com/xxynet/KiraAI/blob/5424c7dffb750a46dabcd20db69ca31007be7780/core/provider/provider_manager.py)：解析默认模型、模型引用和显示名。
-- [核心执行器](https://github.com/xxynet/KiraAI/blob/5424c7dffb750a46dabcd20db69ca31007be7780/core/agent/agent_executor.py)：执行有序模型链及异常切换。
+主要核心接口（链接固定到已核对的 KiraAI 2.34.7 提交）：
+
+- [插件钩子注册](https://github.com/xxynet/KiraAI/blob/69a55725f1a9625900ddb1bb04c6f31fad90a501/core/plugin/plugin_registry.py)：`@on.im_batch_message`。
+- [消息处理](https://github.com/xxynet/KiraAI/blob/69a55725f1a9625900ddb1bb04c6f31fad90a501/core/message_manager.py)与[消息事件](https://github.com/xxynet/KiraAI/blob/69a55725f1a9625900ddb1bb04c6f31fad90a501/core/chat/message_utils.py)：在模型调用前读取 `event.model_group`。
+- [插件上下文](https://github.com/xxynet/KiraAI/blob/69a55725f1a9625900ddb1bb04c6f31fad90a501/core/plugin/plugin_context.py)与[提供商目录](https://github.com/xxynet/KiraAI/blob/69a55725f1a9625900ddb1bb04c6f31fad90a501/core/provider/provider_manager.py)：解析默认模型、模型引用和显示名。
+- [核心执行器](https://github.com/xxynet/KiraAI/blob/69a55725f1a9625900ddb1bb04c6f31fad90a501/core/agent/agent_executor.py)：执行有序模型链及异常切换。
 
 ## 使用边界
 
