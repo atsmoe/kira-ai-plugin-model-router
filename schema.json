@@ -15,11 +15,11 @@
     "name": "Primary Model",
     "type": "string",
     "default": "default",
-    "hint": "Use 'default', one exact provider_id:model_id, or one exact provider display name:model_id reference. Stable provider IDs are recommended for long-lived configurations.",
+    "hint": "Use 'default', one exact provider_id:model_id, or one exact provider display name:model_id reference. v3 also accepts an exact, unique upstream LLM model name after the separator. Stable provider IDs and internal model IDs are recommended for long-lived configurations.",
     "locales": {
       "zh": {
         "name": "主模型",
-        "hint": "填写 default、完整的 provider_id:model_id，或精确显示名:model_id；也可使用全角冒号“：”。长期配置建议使用稳定的 provider ID。"
+        "hint": "填写 default、provider_id:model_id 或精确显示名:model_id；也支持全角冒号“：”。v3 可在分隔符后填写唯一的上游 LLM 模型名称。长期配置建议使用稳定的提供商 ID 和内部模型 ID。"
       }
     }
   },
@@ -27,11 +27,11 @@
     "name": "Fallback Models",
     "type": "list",
     "default": [],
-    "hint": "Ordered provider_id:model_id or exact provider display name:model_id entries. Stable provider IDs are recommended for long-lived configurations.",
+    "hint": "Ordered provider_id:model_id or exact provider display name:model_id entries. v3 also accepts an exact, unique upstream LLM model name. Stable provider IDs and internal model IDs are recommended for long-lived configurations.",
     "locales": {
       "zh": {
         "name": "备用模型",
-        "hint": "按顺序填写 provider_id:model_id 或精确显示名:model_id；也可使用全角冒号“：”，并可跨提供商。长期配置建议使用稳定的 provider ID。"
+        "hint": "按顺序填写 provider_id:model_id 或精确显示名:model_id；支持全角冒号“：”和跨提供商。v3 也接受唯一的上游 LLM 模型名称；长期配置建议使用稳定的提供商 ID 和内部模型 ID。"
       }
     }
   },

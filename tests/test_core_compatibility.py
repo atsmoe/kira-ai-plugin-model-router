@@ -22,6 +22,10 @@ CORE_SOURCE = os.environ.get("KIRA_CORE_SOURCE")
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def core_path(modern, legacy):
+    return modern if (Path(CORE_SOURCE) / modern).is_file() else legacy
+
+
 def definition(path, name, namespace, owner=None):
     tree = ast.parse((Path(CORE_SOURCE) / path).read_text(encoding="utf-8"))
     body = tree.body
@@ -44,7 +48,7 @@ class CoreCompatibilityTests(unittest.TestCase):
         namespace = dict(Optional=Optional, SpecifierSet=SpecifierSet,
                          InvalidSpecifier=InvalidSpecifier, Version=Version,
                          InvalidVersion=InvalidVersion)
-        check = definition("core/plugin/plugin_registry.py", "_check_core_version",
+        check = definition(core_path("core/plugin/manager.py", "core/plugin/plugin_registry.py"), "_check_core_version",
                            namespace, "PluginManager")
         spec = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))["core_version"]
         for version, allowed in (("v2.34.6", False), ("v2.34.7rc1", False),
@@ -59,12 +63,13 @@ class CoreCompatibilityTests(unittest.TestCase):
             model = types.SimpleNamespace(provider_id="backup", model_id="model")
 
         backup = Client()
-        namespace = dict(Optional=Optional, LLMModelClient=Client)
+        namespace = dict(Optional=Optional, LLMModelClient=Client,
+                         ModelType=types.SimpleNamespace(LLM="llm"))
         get_default = definition("core/provider/provider_manager.py", "get_default_llm",
                                  namespace, "ProviderManager")
         manager = types.SimpleNamespace(
             get_default_model_info=lambda _kind: None,
-            get_model_client=lambda provider, model: backup if (provider, model) == ("backup", "model") else None,
+            get_model_client=lambda provider, model, kind=None: backup if (provider, model) == ("backup", "model") else None,
         )
         manager.get_default_llm = types.MethodType(get_default, manager)
         context = types.SimpleNamespace(provider_mgr=manager)
@@ -85,7 +90,7 @@ class CoreCompatibilityTests(unittest.TestCase):
                          Optional=Optional, Union=Union, Callable=Callable,
                          Any=Any, Dict=Dict, List=List)
         for name in ("Priority", "EventType", "EventHandler", "EventHandlerRegistry"):
-            definition("core/plugin/plugin_handlers.py", name, namespace)
+            definition(core_path("core/plugin/handlers.py", "core/plugin/plugin_handlers.py"), name, namespace)
         registry = namespace["EventHandlerRegistry"]()
         priorities = namespace["Priority"]
         event_type = namespace["EventType"].ON_IM_BATCH_MESSAGE
