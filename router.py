@@ -57,9 +57,7 @@ class ModelRouter:
             return None
 
         provider_token, model_id = parsed
-        resolved = self._context.get_llm_client(
-            model_uuid=f"{provider_token}:{model_id}"
-        )
+        resolved = self._get_client(provider_token, model_id)
         if resolved is not None:
             return resolved
 
@@ -75,12 +73,57 @@ class ModelRouter:
             )
             return None
 
-        resolved = self._context.get_llm_client(
-            model_uuid=f"{provider_id}:{model_id}"
-        )
+        if provider_id != provider_token:
+            resolved = self._get_client(provider_id, model_id)
+            if resolved is not None:
+                return resolved
+
+        # v3 separates the immutable model_id from the upstream model_name.
+        # Let core resolve IDs/legacy aliases first, then match an exact LLM name.
+        identity, reason = self._resolve_model_name(provider_id, model_id)
+        if identity is not None:
+            resolved = self._get_client(provider_id, identity)
         if resolved is None:
-            self._log_warning(f"Ignored unavailable {role} model at position {index}.")
+            self._log_warning(
+                f"Ignored unavailable {role} model at position {index}: {reason}."
+            )
         return resolved
+
+    def _get_client(self, provider_id, model_id):
+        try:
+            return self._context.get_llm_client(model_uuid=f"{provider_id}:{model_id}")
+        except Exception:
+            # One unusable reference must not prevent later fallbacks from routing.
+            return None
+
+    def _resolve_model_name(self, provider_id, model_name):
+        manager = getattr(self._context, "provider_mgr", None)
+        get_info = getattr(manager, "get_model_info", None)
+        get_infos = getattr(manager, "get_model_infos", None)
+        if not callable(get_info) or not callable(get_infos):
+            return None, "model catalog is unavailable"
+        try:
+            # An existing ID/alias that failed client construction must never be
+            # reinterpreted as another model's name (e.g. a disabled provider).
+            if get_info(provider_id, model_name, "llm") is not None:
+                return None, "resolved model is unavailable"
+            models = get_infos(provider_id)
+            if not isinstance(models, (list, tuple)):
+                return None, "model catalog is incompatible"
+            matches = [
+                model for model in models
+                if getattr(model, "model_name", None) == model_name
+                and getattr(getattr(model, "model_type", None), "value", None) == "llm"
+            ]
+        except Exception:
+            return None, "model catalog is unavailable"
+        if len(matches) > 1:
+            return None, "model name is ambiguous"
+        if len(matches) == 1:
+            identity = getattr(matches[0], "model_id", None)
+            if isinstance(identity, str) and identity:
+                return identity, "model client is unavailable"
+        return None, "model name was not found"
 
     @staticmethod
     def _parse_reference(model_ref):
@@ -129,8 +172,22 @@ class ModelRouter:
             return None
 
         if provider_name in providers:
+            return providers[provider_name]
+
+        # v3 removes disabled providers from the runtime catalog. Their stored
+        # IDs still take precedence over another provider's display name.
+        try:
+            config = getattr(provider_mgr, "kira_config", None)
+            configured = config.get("providers", {}) if config is not None else {}
+            if provider_name in configured:
+                self._log_warning(
+                    f"Ignored unavailable {role} model at position {index}."
+                )
+                return None
+        except Exception:
             self._log_warning(
-                f"Ignored unavailable {role} model at position {index}."
+                f"Ignored unresolved {role} model at position {index}: "
+                "provider catalog is unavailable."
             )
             return None
 

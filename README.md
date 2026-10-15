@@ -8,11 +8,13 @@
 
 ## 版本与兼容性
 
-当前插件版本：**1.0.5**。要求 **KiraAI >= 2.34.7**。
+当前插件版本：**1.0.6**。要求 **KiraAI >= 2.34.7**，已适配 **KiraAI 3.0.0**。
 
-1.0.5 使用 `core_version: ">=2.34.7"`，只设置最低版本，不锁定精确版本，也不设置最高版本。后续更高正式版本会通过版本检查，无需每次随核心升级修改插件版本范围。低于 2.34.7 的核心无法加载 1.0.5。
+继续使用 `core_version: ">=2.34.7"`，只设置最低版本，不锁定精确版本，也不设置最高版本。版本门槛通过不代表保证兼容所有未来接口变更。
 
-截至 2026-09-25，核对的最新正式版为 [KiraAI 2.34.7](https://github.com/xxynet/KiraAI/releases/tag/v2.34.7)，源码提交为 [`69a5572`](https://github.com/xxynet/KiraAI/commit/69a55725f1a9625900ddb1bb04c6f31fad90a501)。验证包括 29 项插件单元测试和 3 项基于该核心实际源码定义的隔离测试；未启动完整 KiraAI 服务或调用真实提供商。版本检查通过不代表保证兼容所有未来接口变更。
+截至 2026-10-15，核对的最新正式版为 [KiraAI 3.0.0](https://github.com/xxynet/KiraAI/releases/tag/v3.0.0)，源码提交为 [`9db3d67`](https://github.com/xxynet/KiraAI/commit/9db3d672ece283326a434017ac131e7dbc5ab599)。验证包括 36 项插件单元测试、分别针对 2.34.7 与 3.0.0 的 3 项核心源码隔离检查，以及在 3.0.0 运行环境中的 9 项核心集成检查。集成检查使用实际上下文、模型目录、插件装饰器和执行器，提供商为内存中的模拟客户端，没有调用外部模型或发送聊天消息。
+
+1.0.6 适配 v3 的稳定内部模型 ID 与上游模型名称分离：优先让核心解析内部 ID 和迁移别名，之后才按唯一的上游 LLM 名称查找；同一个模型的不同引用最终按稳定 ID 去重。修复停用提供商从运行目录移除后，其 ID 可能被误当成另一家显示名的问题。单个模型引用解析异常不会中断后续备用项。原有稳定 ID 和有效迁移别名配置无需修改。
 
 版本历史：1.0.2 锁定 2.31.4，1.0.3 限制在 2.31.4–2.33.3，1.0.4 移除版本门槛；1.0.5 改为以上最低版本规则。现有有效主备模型配置无需迁移。
 
@@ -51,7 +53,9 @@
 
 分隔符两侧空白会被去除；显示名区分大小写，且必须唯一。提供商部分不能包含冒号；模型 ID 中的后续冒号会保留。主模型还支持特殊值 `default`，备用模型必须填写完整引用。
 
-插件优先按提供商 ID 查找；找不到对应 ID 时才尝试精确显示名。显示名重复、模型不存在或配置格式无效时，会跳过该项，不会猜测或随机选择。若 ID 已存在但模型不可用，也不会再改用同名的其他提供商。
+**v3 模型引用：** `model_id` 是核心分配的稳定内部 ID，`model_name` 是发给提供商的上游名称。插件也接受 `provider_id:model_name` 或 `提供商显示名:model_name`，名称必须在该提供商的 LLM 模型中精确且唯一。内部 ID 和核心维护的旧版迁移别名优先；已解析但不可用的模型不会再被解释成其他模型名称。长期配置建议使用内部 ID，以便上游名称修改后保持路由不变。名称包含的冒号同样保留。
+
+插件优先按提供商 ID 查找；找不到对应 ID 时才尝试精确显示名。显示名重复、模型不存在或配置格式无效时，会跳过该项，不会猜测或随机选择。若 ID 已存在但模型不可用，也不会再改用同名的其他提供商；这也适用于已停用或加载失败的提供商。
 
 ## 配置项
 
@@ -76,7 +80,7 @@
 
 ### 升级 KiraAI 后插件加载失败
 
-请确认核心为 2.34.7 或以上，插件为 1.0.5。1.0.5 不设置版本上限；若满足下限仍加载失败，应查看具体的导入、依赖或接口错误。旧核心不满足下限时，应先升级核心，或保留之前适用的插件版本。
+请确认核心为 2.34.7 或以上，插件为 1.0.6。插件不设置版本上限；若满足下限仍加载失败，应查看具体的导入、依赖或接口错误。旧核心不满足下限时，应先升级核心，或保留之前适用的插件版本。
 
 ### 为什么没有切换备用模型？
 
@@ -113,14 +117,22 @@ git diff --check
 
 单元测试覆盖主备顺序、跨提供商解析、全角冒号、显示名歧义、去重、长度上限、已有模型组保留、生命周期和钩子执行顺序。测试使用模拟上下文与模型客户端，不代表真实提供商调用一定成功。
 
-可选核心源码检查需要 `packaging` 和可信的 KiraAI 源码目录。将环境变量 `KIRA_CORE_SOURCE` 设为该目录后，运行同一条 `unittest` 命令即可启用另外 3 项检查；未设置时会明确跳过。它们执行核心的实际版本检查、上下文解析及钩子排序定义，其他依赖使用模拟对象，不代表完整服务集成验证。版本样例中更高的版本号只用于验证范围表达式。
+可选核心源码检查需要 `packaging` 和可信的 KiraAI 源码目录。将环境变量 `KIRA_CORE_SOURCE` 设为该目录后，运行同一条 `unittest` 命令即可启用另外 3 项检查；未设置时会明确跳过。检查兼容 v2 与 v3 的核心模块路径，执行实际版本检查、上下文解析及钩子排序定义，其他依赖使用模拟对象。版本样例中更高的版本号只用于验证范围表达式。
 
-主要核心接口（链接固定到已核对的 KiraAI 2.34.7 提交）：
+另有独立的 v3 核心集成检查；请使用已安装 KiraAI 3.0.0 依赖的 Python 环境，先设置 `KIRA_CORE_SOURCE` 指向可信源码，再运行：
 
-- [插件钩子注册](https://github.com/xxynet/KiraAI/blob/69a55725f1a9625900ddb1bb04c6f31fad90a501/core/plugin/plugin_registry.py)：`@on.im_batch_message`。
-- [消息处理](https://github.com/xxynet/KiraAI/blob/69a55725f1a9625900ddb1bb04c6f31fad90a501/core/message_manager.py)与[消息事件](https://github.com/xxynet/KiraAI/blob/69a55725f1a9625900ddb1bb04c6f31fad90a501/core/chat/message_utils.py)：在模型调用前读取 `event.model_group`。
-- [插件上下文](https://github.com/xxynet/KiraAI/blob/69a55725f1a9625900ddb1bb04c6f31fad90a501/core/plugin/plugin_context.py)与[提供商目录](https://github.com/xxynet/KiraAI/blob/69a55725f1a9625900ddb1bb04c6f31fad90a501/core/provider/provider_manager.py)：解析默认模型、模型引用和显示名。
-- [核心执行器](https://github.com/xxynet/KiraAI/blob/69a55725f1a9625900ddb1bb04c6f31fad90a501/core/agent/agent_executor.py)：执行有序模型链及异常切换。
+```bash
+python tests/runtime_v3_check.py -v
+```
+
+该命令与模拟核心模块的单元测试分进程运行，日志写入临时目录。它验证真实核心的 ID/迁移别名解析、插件钩子、四类提供商错误后的备用成功、路由后停用提供商、全部失败结果与编程异常传播；不启动完整服务，也不证明外部模型或 IM 平台可用。
+
+主要核心接口（链接固定到已核对的 KiraAI 3.0.0 提交）：
+
+- [插件钩子注册](https://github.com/xxynet/KiraAI/blob/9db3d672ece283326a434017ac131e7dbc5ab599/core/plugin/decorators.py)：`@on.im_batch_message`。
+- [消息事件](https://github.com/xxynet/KiraAI/blob/9db3d672ece283326a434017ac131e7dbc5ab599/core/chat/message_utils.py)：`event.model_group`。
+- [插件上下文](https://github.com/xxynet/KiraAI/blob/9db3d672ece283326a434017ac131e7dbc5ab599/core/plugin/plugin_context.py)、[提供商目录](https://github.com/xxynet/KiraAI/blob/9db3d672ece283326a434017ac131e7dbc5ab599/core/provider/provider_manager.py)与[模型标识](https://github.com/xxynet/KiraAI/blob/9db3d672ece283326a434017ac131e7dbc5ab599/core/provider/model_identity.py)：解析默认模型、内部 ID 和迁移别名。
+- [核心执行器](https://github.com/xxynet/KiraAI/blob/9db3d672ece283326a434017ac131e7dbc5ab599/core/agent/agent_executor.py)：执行有序模型链及异常切换。
 
 ## 使用边界
 

@@ -12,7 +12,7 @@ class MetadataTests(unittest.TestCase):
         schema = json.loads((ROOT / "schema.json").read_text(encoding="utf-8"))
 
         self.assertEqual(manifest["plugin_id"], "kira-ai-plugin-model-router")
-        self.assertEqual(manifest["version"], "1.0.5")
+        self.assertEqual(manifest["version"], "1.0.6")
         self.assertEqual(manifest["core_version"], ">=2.34.7")
         self.assertEqual(
             manifest["repo"],
